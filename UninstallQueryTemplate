@@ -1,0 +1,45 @@
+SELECT SMS_R_SYSTEM.ResourceID
+	,SMS_R_SYSTEM.ResourceType
+	,SMS_R_SYSTEM.Name
+	,SMS_R_SYSTEM.SMSUniqueIdentifier
+	,SMS_R_SYSTEM.ResourceDomainORWorkgroup
+	,SMS_R_SYSTEM.Client
+FROM SMS_R_System
+WHERE ResourceID IN (
+		SELECT DISTINCT ResourceID
+		FROM SMS_G_System_INSTALLED_SOFTWARE
+		WHERE SMS_G_System_INSTALLED_SOFTWARE.ProductName = "[ISProductName]"
+			AND SMS_G_System_INSTALLED_SOFTWARE.ProductVersion LIKE "[ISProductMajorVersionNumber].%"
+			AND DATEDIFF(dd, SMS_G_System_INSTALLED_SOFTWARE.InstallDate, GetDate()) > 60
+			AND ResourceID NOT IN (
+				SELECT DISTINCT SMS_G_System_SoftwareUsageData.ResourceID
+				FROM SMS_G_System_SoftwareUsageData
+				WHERE SMS_G_System_SoftwareUsageData.ProductName = "[SWUDProductName]"
+					AND SMS_G_System_SoftwareUsageData.ProductVersion LIKE "[SWUDProductMajorVersionNumber].%"
+					AND DATEDIFF(dd, SMS_G_System_SoftwareUsageData.StartTimeGMT, GetDate()) < 60
+					OR DATEDIFF(dd, SMS_G_System_SoftwareUsageData.EndTimeGMT, GetDate()) < 60
+				)
+			AND ResourceID NOT IN (
+				SELECT SMS_R_SYSTEM.ResourceID
+				FROM SMS_R_SYSTEM
+				INNER JOIN SMS_MonthlyUsageSummary ON SMS_R_SYSTEM.ResourceID = SMS_MonthlyUsageSummary.ResourceID
+				INNER JOIN SMS_MeteredFiles ON SMS_MonthlyUsageSummary.FileID = SMS_MeteredFile.MeteredFileID
+				WHERE DATEDIFF(dd, SMS_MonthlyUsageSummary.LastUsage, GetDate()) < 60
+					AND SMS_MeteredFiles.RuleID = "[SWMRuleID]"
+				)
+			AND ResourceID IN (
+				SELECT DISTINCT ResourceID
+				FROM SMS_G_System_CCM_SWMETERINGAGENTPROPERTIES
+				WHERE DATEDIFF(dd, SMS_G_System_CCM_SWMETERINGAGENTPROPERTIES.LastMaintenanceScanTime, GetDate()) < 90
+				)
+			AND ResourceID IN (
+				SELECT DISTINCT ResourceID
+				FROM SMS_G_System_OPERATING_SYSTEM
+				WHERE DATEDIFF(dd, SMS_G_System_OPERATING_SYSTEM.InstallDate, GetDate()) > 90
+				)
+			AND ResourceID IN (
+				SELECT DISTINCT ResourceID
+				FROM SMS_G_System_WORKSTATION_STATUS
+				WHERE DATEDIFF(dd, SMS_G_System_WORKSTATION_STATUS.LastHardwareScan, GetDate()) < 30
+				)
+		)
